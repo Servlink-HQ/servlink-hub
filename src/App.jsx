@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useGlobalContent } from "./contexts/GlobalContentContext";
+import { EditableText } from "./components/EditableText";
+import { EditableList } from "./components/EditableList";
+import { EditModeFAB } from "./components/EditModeFAB";
 
 const COLORS = {
   bg: "#F9F9F8",
@@ -41,42 +45,23 @@ const Icons = {
   Book: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
 };
 
-const canvasData = [
-  { id: "partners", type: "infra", title: "Key Partners", col: "1/3", row: "1/3", items: [{text: "SHRBS (Sindicato Hoteleiro)"}, {text: "Gateways de Pagamento"}, {text: "SEBRAE / SENAC"}] },
-  { id: "activities", type: "infra", title: "Key Activities", col: "3/5", row: "1/2", items: [{text: "Onboarding & Curadoria"}, {text: "Motor de Pagamento"}] },
-  { id: "resources", type: "infra", title: "Key Resources", col: "3/5", row: "2/3", items: [{text: "API Laravel + Next.js"}, {text: "Base Validada"}] },
-  { id: "vp", type: "core", title: "Value Proposition", col: "5/7", row: "1/3", items: [{id: "vp_agile", text: "Agilidade (Match 60s)"}, {text: "Custo Fixo → Variável"}, {text: "Selo ServLink Verificado"}] },
-  { id: "relations", type: "market", title: "Customer Relationships", col: "7/9", row: "1/2", items: [{text: "Self-Service Assistido"}, {text: "Comunidade Hiperlocal"}] },
-  { id: "channels", type: "market", title: "Channels", col: "7/9", row: "2/3", items: [{text: "Web App Mobile-First"}, {text: "Marketing Integrado"}] },
-  { id: "segments", type: "market", title: "Customer Segments", col: "9/11", row: "1/3", items: [{id: "seg_b2b", text: "Estabelecimentos B2B"}, {text: "Profissionais A & B"}] },
-];
 
-const narrativeSteps = [
-  { id: "step1", time: "18:00", event: "Casa Lotada", desc: "100% de ocupação esperada no Réveillon em Jurerê Internacional.", status: "normal" },
-  { id: "jurere", time: "18:45", event: "O Choque", desc: "Chef descobre que 2 garçons e 1 auxiliar não apareceram. Nenhum aviso prévio.", status: "critical" },
-  { id: "step3", time: "19:00", event: "Caos Oculto", desc: "Grupos de WhatsApp frenéticos. 'Alguém tem indicação livre?'. Ninguém responde.", status: "warning" },
-  { id: "step4", time: "20:30", event: "Impacto Visível", desc: "Gargalo no salão. Pratos atrasam 45min. Clientes premium insatisfeitos e reviews negativos.", status: "critical" },
-  { id: "step5", time: "01:00", event: "Fechamento", desc: "Receita sub-otimizada em 25% na noite mais importante devido ao gargalo operacional.", status: "loss" },
-];
 
 export default function ServLinkBackOffice() {
+  const { data, updateData, isEditMode } = useGlobalContent();
   const [activeMain, setActiveMain] = useState("home");
   const [activeSub, setActiveSub] = useState(null);
   const [globalHover, setGlobalHover] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const gridRef = useRef(null);
 
-  // States for SCRUM Board
-  const [tasks, setTasks] = useState([
-    { id: "SL-01", title: "Refinar Proposta de Valor no BMC", desc: "Ajustar o texto para focar na métrica de 60s.", status: "Done", priority: "High", points: 3, sprint: "Sprint 01", assignees: ["MC"], deadline: "21 Mar", subtasks: {done: 3, total: 3} },
-    { id: "SL-02", title: "Estruturar Storytelling Jurerê", desc: "Montar narrativa do Réveillon e impacto do No-Show.", status: "In Progress", priority: "Medium", points: 5, sprint: "Sprint 01", assignees: ["MC"], deadline: "23 Mar", subtasks: {done: 1, total: 4} },
-    { id: "SL-03", title: "Arquitetura Next.js/Laravel", desc: "Criar o arquivo boilerplate yaml com a stack. Configurar CI/CD básico.", status: "Backlog", priority: "Low", points: 8, sprint: "Sprint 01", assignees: ["EQ"], deadline: "28 Mar", subtasks: {done: 0, total: 5} }
-  ]);
+  // States for SCRUM Board mapping from context
+  const tasks = data.scrum.tasks;
+  const setTasks = (newTasks) => updateData('scrum.tasks', newTasks);
+  
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
   const [sprintView, setSprintView] = useState("board");
-  const [diferencialText, setDiferencialText] = useState("Digite aqui");
-  const [diferencialTitle, setDiferencialTitle] = useState("Ideias");
   const [noteStatus, setNoteStatus] = useState("[Rascunho Automático]");
 
   const handleSaveNote = () => {
@@ -89,8 +74,8 @@ export default function ServLinkBackOffice() {
     const newId = "SL-" + String(tasks.length + 1).padStart(2, '0');
     setTasks([...tasks, {
       id: newId,
-      title: diferencialTitle || "Ideia Operacional Sem Título",
-      desc: diferencialText,
+      title: data.diferencial.docTitle || "Ideia Operacional Sem Título",
+      desc: data.diferencial.docText,
       status: "Backlog",
       priority: "Medium",
       points: 2,
@@ -258,7 +243,7 @@ export default function ServLinkBackOffice() {
     );
   };
 
-  const renderCard = (block) => {
+  const renderCard = (block, blockIndex) => {
     const isCore = block.type === "core";
     const isInfra = block.type === "infra";
     const xParallax = mousePos.x * (isCore ? 15 : isInfra ? -5 : 5);
@@ -301,28 +286,31 @@ export default function ServLinkBackOffice() {
         }}>
           {isInfra && <span className="status-dot status-ok" />}
           {isCore && <span className="status-dot status-alert" style={{ background: COLORS.highlight, boxShadow: `0 0 8px ${COLORS.highlight}88` }} />}
-          {block.title}
+          <EditableText path={`bmc.cards.${blockIndex}.title`} />
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
-          {block.items.map((item, i) => {
+        <EditableList
+          listPath={`bmc.cards.${blockIndex}.items`}
+          renderItem={(item, i) => {
             const itemHighlight = globalHover === "jurere" && (item.id === "vp_agile" || item.id === "seg_b2b");
             return (
-              <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <div key={item.id || i} style={{ display: "flex", alignItems: "baseline", gap: 8, flex: 1 }}>
                 <div style={{ width: 4, height: 4, borderRadius: "50%", background: itemHighlight ? COLORS.highlight : COLORS.textDim, flexShrink: 0 }} />
-                <div style={{
-                  fontSize: isCore ? 14 : 12,
-                  fontFamily: isInfra ? "var(--font-mono)" : "var(--font-ui)",
-                  fontWeight: itemHighlight || isCore ? 600 : 400,
-                  color: itemHighlight ? COLORS.highlight : COLORS.textMuted,
-                  lineHeight: 1.4, transition: "color 0.3s ease"
-                }}>
-                  {item.text}
-                </div>
+                <EditableText
+                  path={`bmc.cards.${blockIndex}.items.${i}.text`}
+                  style={{
+                    fontSize: isCore ? 14 : 12,
+                    fontFamily: isInfra ? "var(--font-mono)" : "var(--font-ui)",
+                    fontWeight: itemHighlight || isCore ? 600 : 400,
+                    color: itemHighlight ? COLORS.highlight : COLORS.textMuted,
+                    lineHeight: 1.4, transition: "color 0.3s ease",
+                    flex: 1
+                  }}
+                />
               </div>
             );
-          })}
-        </div>
+          }}
+        />
       </motion.div>
     );
   };
@@ -334,8 +322,8 @@ export default function ServLinkBackOffice() {
       style={{ display: "flex", flexDirection: "column", gap: 32 }}
     >
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.03em", color: COLORS.text }}>Business Model Canvas</h2>
-        <p style={{ fontSize: 13, color: COLORS.textMuted }}>Mapeamento estrutural do ecossistema b2b2c.</p>
+        <EditableText path="bmc.title" as="h2" style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.03em", color: COLORS.text, marginBottom: 4 }} />
+        <EditableText path="bmc.subtitle" as="p" style={{ fontSize: 13, color: COLORS.textMuted, margin: 0 }} />
       </div>
 
       <div 
@@ -348,7 +336,7 @@ export default function ServLinkBackOffice() {
         }}
       >
         <LivingConnectors />
-        {canvasData.map(renderCard)}
+        {data.bmc.cards.map((block, i) => renderCard(block, i))}
       </div>
 
       <motion.div className="glass-dock" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, padding: "24px 32px", marginTop: 16, position: "relative" }}>
@@ -387,15 +375,17 @@ export default function ServLinkBackOffice() {
       <div style={{ background: "#FFF", borderRadius: 12, border: `1px solid ${COLORS.border}`, padding: "40px 60px", boxShadow: "0 4px 20px rgba(0,0,0,0.03)", fontFamily: "var(--font-ui)", lineHeight: 1.8, fontSize: 16, color: COLORS.text, display: "flex", flexDirection: "column", minHeight: 480 }}>
         <input 
           type="text" 
-          value={diferencialTitle}
-          onChange={(e) => setDiferencialTitle(e.target.value)}
+          value={data.diferencial.docTitle}
+          onChange={(e) => updateData('diferencial.docTitle', e.target.value)}
+          readOnly={!isEditMode}
           style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", marginBottom: 24, paddingBottom: 16, border: "none", outline: "none", width: "100%", color: COLORS.text, background: "transparent", borderBottom: `1px dashed ${COLORS.border}` }} 
           placeholder="Título do documento..."
         />
         
         <textarea
-          value={diferencialText}
-          onChange={(e) => setDiferencialText(e.target.value)}
+          value={data.diferencial.docText}
+          onChange={(e) => updateData('diferencial.docText', e.target.value)}
+          readOnly={!isEditMode}
           placeholder="Comece a digitar suas ideias estratégicas aqui..."
           style={{ flex: 1, width: "100%", border: "none", outline: "none", resize: "none", background: "transparent", color: COLORS.textMuted, fontSize: 15, lineHeight: 1.8, fontFamily: "var(--font-ui)" }}
         />
@@ -440,13 +430,11 @@ export default function ServLinkBackOffice() {
   const renderCoreProposta = () => (
     <motion.div key="proposta" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
       <div style={{ paddingRight: 40 }}>
-        <SectionTitle title="The Fricton Map" subtitle="A dor real da sazonalidade em Florianópolis." />
-        <div style={{ fontSize: 15, color: COLORS.slateDim, lineHeight: 1.6, marginBottom: 24 }}>
-          A informalidade dita as regras do turnover na alta estação. 
-          Enquanto a demanda escala exponencialmente de Dezembro a Março, 
-          a estrutura fixa de hospitalidade não suporta. O gatilho de dor não é 
-          apenas o <b>No-Show</b>, é a <b>perda imediata da margem premium</b>.
+        <div style={{ marginBottom: 32 }}>
+          <EditableText path="proposta.title" as="h2" style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", color: COLORS.text, margin: 0, marginBottom: 4 }} />
+          <EditableText path="proposta.subtitle" as="p" style={{ fontSize: 14, color: COLORS.textMuted, margin: 0 }} />
         </div>
+        <EditableText path="proposta.desc" as="div" style={{ fontSize: 15, color: COLORS.slateDim, lineHeight: 1.6, marginBottom: 24 }} />
         
         {/* Stage Manager Style Lead Gen Tracker */}
         <div className="glass-dock" style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32, background: COLORS.surfaceSolid }}>
@@ -466,11 +454,12 @@ export default function ServLinkBackOffice() {
       </div>
       
       <div style={{ position: "relative", paddingLeft: 24, borderLeft: `1px solid ${COLORS.border}` }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {narrativeSteps.map((step, i) => {
+        <EditableList
+          listPath="proposta.steps"
+          renderItem={(step, i) => {
             const isHovered = globalHover === step.id;
             return (
-              <div key={i} style={{ position: "relative", cursor: "pointer" }}
+              <div key={step.id || i} style={{ position: "relative", cursor: "pointer", display: "flex", flexDirection: "column", flex: 1, paddingBottom: 24 }}
                    onMouseEnter={() => setGlobalHover(step.id)}
                    onMouseLeave={() => setGlobalHover(null)}>
                 <div style={{
@@ -479,13 +468,13 @@ export default function ServLinkBackOffice() {
                   border: `2px solid ${step.status === 'normal' ? COLORS.textMuted : 'transparent'}`,
                   boxShadow: isHovered && step.id === 'jurere' ? `0 0 12px ${COLORS.highlight}` : 'none'
                 }} />
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: isHovered && step.id === 'jurere' ? COLORS.highlight : COLORS.textMuted, marginBottom: 4 }}>{step.time}</div>
-                <div style={{ fontSize: 14, fontWeight: isHovered && step.id === 'jurere' ? 600 : 500, color: isHovered && step.id === 'jurere' ? COLORS.highlight : COLORS.text, marginBottom: 4 }}>{step.event}</div>
-                <div style={{ fontSize: 13, color: COLORS.textDim, lineHeight: 1.5 }}>{step.desc}</div>
+                <EditableText path={`proposta.steps.${i}.time`} style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: isHovered && step.id === 'jurere' ? COLORS.highlight : COLORS.textMuted, marginBottom: 4 }} />
+                <EditableText path={`proposta.steps.${i}.event`} style={{ fontSize: 14, fontWeight: isHovered && step.id === 'jurere' ? 600 : 500, color: isHovered && step.id === 'jurere' ? COLORS.highlight : COLORS.text, marginBottom: 4 }} />
+                <EditableText path={`proposta.steps.${i}.desc`} as="div" style={{ fontSize: 13, color: COLORS.textDim, lineHeight: 1.5 }} />
               </div>
             )
-          })}
-        </div>
+          }}
+        />
       </div>
     </motion.div>
   );
@@ -493,19 +482,20 @@ export default function ServLinkBackOffice() {
   const renderCorePitch = () => (
     <motion.div key="pitch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ display: "grid", gridTemplateColumns: "350px 1fr", gap: 32, height: "calc(100vh - 240px)" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16, overflowY: "auto", paddingRight: 16 }}>
-        <SectionTitle title="Pitch Studio" subtitle="Script master." />
-        {[
-          { act: "01", title: "O Gancho", text: "Imagine o restaurante mais caro da ilha. Hoje é Réveillon. 2 garçons faltaram." },
-          { act: "02", title: "A Fricção", text: "Grupos de WhatsApp não resolvem o hiato de Confiança. É roleta russa operacional." },
-          { act: "03", title: "A Magia", text: "ServLink notifica a rede local. Profissionais verificados aplicam. Match em 60s." },
-          { act: "04", title: "Tração", text: "2.700 CNPJs ativos só no epicentro de Floripa. Custo fixo vira variável." }
-        ].map((s, i) => (
-          <div key={i} style={{ padding: 16, background: COLORS.surfaceSolid, border: `1px solid ${COLORS.border}`, borderRadius: 8 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: COLORS.highlight, marginBottom: 4 }}>ACT {s.act}</div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: COLORS.text, marginBottom: 4 }}>{s.title}</div>
-            <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.5 }}>{s.text}</div>
-          </div>
-        ))}
+        <div style={{ marginBottom: 32 }}>
+          <EditableText path="pitch.title" as="h2" style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", color: COLORS.text, margin: 0, marginBottom: 4 }} />
+          <EditableText path="pitch.subtitle" as="p" style={{ fontSize: 13, color: COLORS.textMuted, margin: 0 }} />
+        </div>
+        <EditableList
+          listPath="pitch.acts"
+          renderItem={(s, i) => (
+            <div key={s.id || i} style={{ padding: 16, background: COLORS.surfaceSolid, border: `1px solid ${COLORS.border}`, borderRadius: 8, flex: 1, display: "flex", flexDirection: "column" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: COLORS.highlight, marginBottom: 4 }}>ACT <EditableText path={`pitch.acts.${i}.act`} /></div>
+              <EditableText path={`pitch.acts.${i}.title`} style={{ fontSize: 13, fontWeight: 500, color: COLORS.text, marginBottom: 4 }} />
+              <EditableText path={`pitch.acts.${i}.text`} as="div" style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.5 }} />
+            </div>
+          )}
+        />
       </div>
       <div style={{ background: COLORS.slate, borderRadius: 12, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
         <div style={{ position: "absolute", top: 16, left: 16, fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(255,255,255,0.4)" }}>REFERENCE_PLAYER.mov</div>
@@ -583,22 +573,20 @@ export default function ServLinkBackOffice() {
 
   const renderGrowthBlog = () => (
     <motion.div key="blog" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-      <SectionTitle title="Technical Papers" subtitle="Conteúdo estratégico sobre a economia gig em Florianópolis." />
+      <div style={{ marginBottom: 32 }}>
+        <EditableText path="blog.title" as="h2" style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", color: COLORS.text, margin: 0, marginBottom: 4 }} />
+        <EditableText path="blog.subtitle" as="p" style={{ fontSize: 14, color: COLORS.textMuted, margin: 0 }} />
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {[
-          { tag: "MERCADO", title: "O Custo Invisível do No-Show", date: "Q3 2026", desc: "Análise quantitativa do impacto de faltas na margem de lucro de 2.700 estabelecimentos." },
-          { tag: "PRODUTO", title: "O Match de 60 Segundos", date: "Q4 2026", desc: "Como a arquitetura de eventos distribui oportunidades na rede ServLink." },
-          { tag: "PARCERIAS", title: "Integração SHRBS", date: "Draft", desc: "Validação institucional e seus efeitos em redes hiperlocais." },
-          { tag: "VISÃO", title: "Artesãos do Serviço", date: "Draft", desc: "Mobilidade social e o sistema de reputação bilateral." }
-        ].map((p, i) => (
-          <div key={i} className="bento-card" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+        {data.blog.posts.map((p, i) => (
+          <div key={p.id || i} className="bento-card" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: COLORS.highlight }}>{p.tag}</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: COLORS.textMuted }}>{p.date}</div>
+              <EditableText path={`blog.posts.${i}.tag`} style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: COLORS.highlight }} />
+              <EditableText path={`blog.posts.${i}.date`} style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: COLORS.textMuted }} />
             </div>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 500, color: COLORS.text, marginBottom: 8 }}>{p.title}</div>
-              <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>{p.desc}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <EditableText path={`blog.posts.${i}.title`} as="h3" style={{ fontSize: 16, fontWeight: 500, color: COLORS.text, margin: 0 }} />
+              <EditableText path={`blog.posts.${i}.desc`} as="p" style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5, margin: 0 }} />
             </div>
           </div>
         ))}
@@ -608,21 +596,17 @@ export default function ServLinkBackOffice() {
 
   const renderGrowthPartners = () => (
     <motion.div key="partners" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-      <SectionTitle title="Validation Ecosystem" subtitle="Integrações B2B e parceiros institucionais." />
+      <div style={{ marginBottom: 32 }}>
+        <EditableText path="partners.title" as="h2" style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", color: COLORS.text, margin: 0, marginBottom: 4 }} />
+        <EditableText path="partners.subtitle" as="p" style={{ fontSize: 14, color: COLORS.textMuted, margin: 0 }} />
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-        {[
-          { name: "SHRBS", status: "Strategic" },
-          { name: "SENAC", status: "Technical" },
-          { name: "SEBRAE", status: "Business" },
-          { name: "Stripe", status: "Infra" },
-          { name: "Vercel", status: "Infra" },
-          { name: "AWS", status: "Infra" }
-        ].map((p, i) => (
-          <div key={i} className="bento-card" style={{ height: 120, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", filter: "grayscale(100%)", transition: "all 0.3s ease", padding: 16 }}
+        {data.partners.list.map((p, i) => (
+          <div key={p.id || i} className="bento-card" style={{ height: 120, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", filter: isEditMode ? "none" : "grayscale(100%)", transition: "all 0.3s ease", padding: 16 }}
                onMouseEnter={e => e.currentTarget.style.filter = "grayscale(0%)"}
-               onMouseLeave={e => e.currentTarget.style.filter = "grayscale(100%)"}>
-            <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, letterSpacing: "-0.04em", cursor: "default" }}>{p.name}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: COLORS.textMuted, marginTop: 8 }}>[{p.status}]</div>
+               onMouseLeave={e => e.currentTarget.style.filter = isEditMode ? "none" : "grayscale(100%)"}>
+            <EditableText path={`partners.list.${i}.name`} style={{ fontSize: 18, fontWeight: 600, color: COLORS.text, letterSpacing: "-0.04em", cursor: "default" }} />
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: COLORS.textMuted, marginTop: 8, display: "flex", gap: 4 }}>[<EditableText path={`partners.list.${i}.status`} />]</div>
           </div>
         ))}
       </div>
@@ -670,9 +654,9 @@ export default function ServLinkBackOffice() {
         {/* Gestão Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingBottom: 16, borderBottom: `1px solid ${COLORS.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", color: COLORS.text, marginBottom: 4 }}>Sprint 01: Modelagem</h2>
-              <div style={{ fontSize: 13, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 6 }}><Icons.List /> 3 issues</div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <EditableText path="scrum.sprintTitle" as="h2" style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", color: COLORS.text, marginBottom: 4, margin: 0 }} />
+              <div style={{ fontSize: 13, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 6 }}><Icons.List /> {tasks.length} issues</div>
             </div>
             
             <div style={{ height: 24, width: 1, background: COLORS.border, margin: "0 8px" }} />
@@ -880,56 +864,69 @@ export default function ServLinkBackOffice() {
     <motion.div key="home" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} style={{ display: "flex", flexDirection: "column", gap: 32, paddingBottom: 60, height: "100%" }}>
       {/* Hero Section */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16, marginTop: 20 }}>
-        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.04em", color: COLORS.text }}>Bem-vindo ao ServLink Hub.</h1>
-        <p style={{ fontSize: 18, color: COLORS.textMuted, lineHeight: 1.6, maxWidth: 800 }}>
-          Este é o ecossistema central de desenvolvimento do projeto de ADS, onde a <b>estratégia de negócio (B2B Staffing) e a execução técnica se encontram.</b>  Maneje a planta matriz do app, acompanhe o crescimento analítico ou direcione a arquitetura técnica.
-        </p>
+        <EditableText 
+          path="home.heroTitle" 
+          as="h1" 
+          style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.04em", color: COLORS.text, margin: 0 }} 
+        />
+        <EditableText 
+          path="home.heroDesc" 
+          as="p" 
+          style={{ fontSize: 18, color: COLORS.textMuted, lineHeight: 1.6, maxWidth: 800, margin: 0 }} 
+        />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 32 }}>
         
         {/* Bento Grid Navegacao */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {[
-            { id: "core", sub: "proposta", icon: Icons.Play, title: "Proposta de Valor", desc: "Onde a dor estrutural de Jurerê encontra a resiliência escalável do nosso app." },
-            { id: "core", sub: "bmc", icon: Icons.System, title: "Business Model Canvas", desc: "A engrenagem do blueprint estratégico e as regras de negócio em alto nível." },
-            { id: "sprints", sub: "board", icon: Icons.Sprints, title: "SCRUM Board", desc: "Gestão executiva linear e coordenação ágil das nossas Sprints de engenharia." },
-            { id: "growth", sub: "partners", icon: Icons.Growth, title: "Marketing & Parcerias", desc: "Nossa estratégia B2B de invasão descentralizada e integração com sindicatos." },
-            { id: "core", sub: "diferencial", icon: Icons.Book, title: "Diferencial Competitivo", desc: "O que nos torna uma proposta absurdamente única perante o cenário catarinense." },
-          ].map(card => (
+          {data.home.cards.map((card, idx) => {
+            const navMap = {
+              core_proposta: { main: "core", sub: "proposta", icon: Icons.Play },
+              core_bmc: { main: "core", sub: "bmc", icon: Icons.System },
+              sprints_board: { main: "sprints", sub: "board", icon: Icons.Sprints },
+              growth_partners: { main: "growth", sub: "partners", icon: Icons.Growth },
+              core_diferencial: { main: "core", sub: "diferencial", icon: Icons.Book }
+            };
+            const nav = navMap[card.id] || { main: "home", sub: null, icon: Icons.System };
+            const Icon = nav.icon;
+            return (
             <motion.div 
-              key={card.title}
-              onClick={() => { setActiveMain(card.id); setActiveSub(card.sub); }}
+              key={card.id}
+              onClick={(e) => { 
+                if (isEditMode) e.stopPropagation();
+                else { setActiveMain(nav.main); setActiveSub(nav.sub); }
+              }}
               className="bento-card"
-              style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, background: COLORS.surfaceSolid, height: "100%" }}
-              whileHover={{ y: -4, borderColor: COLORS.textDim }}
+              style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, background: COLORS.surfaceSolid, height: "100%", cursor: isEditMode ? 'default' : 'pointer' }}
+              whileHover={{ y: isEditMode ? 0 : -4, borderColor: isEditMode ? COLORS.border : COLORS.textDim }}
             >
               <div style={{ width: 40, height: 40, borderRadius: 10, background: COLORS.bg, border: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.text, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-                <card.icon />
+                <Icon />
               </div>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 600, color: COLORS.text, marginBottom: 8, letterSpacing: "-0.01em" }}>{card.title}</h3>
-                <p style={{ fontSize: 14, color: COLORS.textMuted, lineHeight: 1.5 }}>{card.desc}</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <EditableText path={`home.cards.${idx}.title`} as="h3" style={{ fontSize: 16, fontWeight: 600, color: COLORS.text, letterSpacing: "-0.01em", margin: 0 }} />
+                <EditableText path={`home.cards.${idx}.desc`} as="p" style={{ fontSize: 14, color: COLORS.textMuted, lineHeight: 1.5, margin: 0 }} />
               </div>
               <div style={{ marginTop: "auto", paddingTop: 16, display: "flex", alignItems: "center", color: COLORS.textDim, fontSize: 13, fontWeight: 500, fontFamily: "var(--font-mono)" }}>
                 [Acessar Módulo] <span style={{ marginLeft: 6 }}><Icons.ArrowRight /></span>
               </div>
             </motion.div>
-          ))}
+          )})}
         </div>
 
         {/* Status Widget Lateral */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           {/* Milestone */}
           <div className="bento-card" style={{ padding: 24, background: "#FFF", display: "flex", flexDirection: "column", gap: 16, cursor: "default" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", color: COLORS.textMuted, textTransform: "uppercase" }}>Próxima Milestone</div>
+            <EditableText path="home.milestone.title" as="div" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", color: COLORS.textMuted, textTransform: "uppercase" }} />
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 40, height: 40, borderRadius: 8, background: "rgba(0,102,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.highlight, border: `1px solid rgba(0,102,255,0.15)` }}>
                 <Icons.Calendar />
               </div>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.text }}>Status Report ADS</div>
-                <div style={{ fontSize: 13, color: COLORS.textMuted }}>Segunda-feira 20h00</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <EditableText path="home.milestone.event" as="div" style={{ fontSize: 15, fontWeight: 600, color: COLORS.text }} />
+                <EditableText path="home.milestone.time" as="div" style={{ fontSize: 13, color: COLORS.textMuted }} />
               </div>
             </div>
           </div>
@@ -976,6 +973,7 @@ export default function ServLinkBackOffice() {
 
   return (
     <>
+      <EditModeFAB />
       <style>{css}</style>
       <div className="mesh-bg" />
       <div style={{ width: "100%", minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative", zIndex: 1 }}>
