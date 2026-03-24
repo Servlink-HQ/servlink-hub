@@ -29,3 +29,17 @@ dist-ssr
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Google credentials & service accounts
+client_secret*.json
+service_account*.json
+*service_account*.json
+credentials.json
+token.json
+
+# Windows Zone.Identifier files
+*.Zone.Identifier
+*:Zone.Identifier
+
+# Reference/backup files
+servlink-backoffice.jsx
